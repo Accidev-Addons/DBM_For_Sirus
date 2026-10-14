@@ -465,6 +465,9 @@ local onUpdateRadar
 local dropdownFrame
 local initializeDropdown
 local initRangeCheck -- initializes the range check for a specific range (if necessary), returns false if the initialization failed (because of a map range check in an unknown zone)
+local enemyCheckFunc
+local mapRanges = { 5, 6, 8, 10, 11, 12, 13, 14, 15, 16, 18, 20, 30, 35, 40 }
+local fallbackRanges = { 5, 10, 11, 13, 16, 20, 24, 30, 35, 48, 61, 77 }
 local dots = {}
 local charms = {}
 
@@ -584,29 +587,14 @@ do
 
 		elseif level == 2 then
 			if menu == "range" then
-				pX, pY = GetPlayerMapPosition("player")
-				if pX == 0 and pY == 0 then -- если координаты 0.0, добавим дальности из списка предметов
-					local ranges = { 5, 10, 11, 13, 16, 20, 30, 35, 48 }
-					for _, r in pairs(ranges) do
-						info = UIDropDownMenu_CreateInfo()
-						info.text = L.RANGECHECK_SETRANGE_TO:format(r)
-						info.func = setRange
-						info.arg1 = r
-						info.checked = (frame.range == r)
-						UIDropDownMenu_AddButton(info, 2)
-					end
-				else
-					local ranges = { 5, 6, 8, 10, 11, 12, 13, 14, 15, 16, 18, 20, 30, 35, 40 }
-					for _, r in pairs(ranges) do
-						if initRangeCheck(r) then -- этот чек всегда возвращает false, если координаты 0.0
-							info = UIDropDownMenu_CreateInfo()
-							info.text = L.RANGECHECK_SETRANGE_TO:format(r)
-							info.func = setRange
-							info.arg1 = r
-							info.checked = (frame.range == r)
-							UIDropDownMenu_AddButton(info, 2)
-						end -- и поэтому список дальностей пустой
-					end
+				local ranges = initRangeCheck() and mapRanges or fallbackRanges
+				for _, r in ipairs(ranges) do
+					info = UIDropDownMenu_CreateInfo()
+					info.text = L.RANGECHECK_SETRANGE_TO:format(r)
+					info.func = setRange
+					info.arg1 = r
+					info.checked = (frame.range == r)
+					UIDropDownMenu_AddButton(info, 2)
 				end
 			elseif menu == "sounds" then
 				info = UIDropDownMenu_CreateInfo()
@@ -872,144 +860,56 @@ end
 ----------------
 
 local soundUpdate = 0
+local function addUnitLine(self, uId)
+	local color = RAID_CLASS_COLORS[select(2, UnitClass(uId))] or NORMAL_FONT_COLOR
+	local icon = GetRaidTargetIndex(uId)
+	local name = UnitName(uId)
+	local text = icon and ("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:0|t %s"):format(icon, name) or name
+	self:AddLine(text, color.r, color.g, color.b)
+end
+
+local function getGroupUnits()
+	local numPlayers = GetNumRaidMembers()
+	if numPlayers > 0 then
+		return "raid%d", numPlayers
+	end
+	return "party%d", GetNumPartyMembers()
+end
+
 function onUpdate(self, elapsed)
-	local color
 	local j = 0
 	self:ClearLines()
 	self:SetText((frame.reverse and L.RANGECHECK_RHEADER or L.RANGECHECK_HEADER):format(self.range), 1, 1, 1)
-	if initRangeCheck(self.range) then
-		if self.bossMode then
-			local uId = self.bossUnit
-			if uId and enemyCheckFunc(uId, self.range) and (not self.filter or self.filter(uId)) then
-				color = NORMAL_FONT_COLOR
-				local text = UnitName(uId)
-				self:AddLine(text, color.r, color.g, color.b)
-			end
-		else
-			if GetNumRaidMembers() > 0 then
-				for i = 1, GetNumRaidMembers() do
-					local uId = "raid" .. i
-					if not frame.reverse and not UnitIsUnit(uId, "player") and not UnitIsDeadOrGhost(uId) and
-						self.checkFunc(uId, self.range) and
-						(not self.filter or self.filter(uId)) then
-						j = j + 1
-						color = RAID_CLASS_COLORS[select(2, UnitClass(uId))] or NORMAL_FONT_COLOR
-						local icon = GetRaidTargetIndex(uId)
-						local text = icon and ("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:0|t %s"):format(icon, UnitName(uId))
-							or UnitName(uId)
-						self:AddLine(text, color.r, color.g, color.b)
-						if j >= 5 then
-							break
-						end
-					elseif frame.reverse and not UnitIsUnit(uId, "player") and not UnitIsDeadOrGhost(uId) and
-						not self.checkFunc(uId, self.range) and (not self.filter or self.filter(uId)) then
-						j = j + 1
-						color = RAID_CLASS_COLORS[select(2, UnitClass(uId))] or NORMAL_FONT_COLOR
-						local icon = GetRaidTargetIndex(uId)
-						local text = icon and ("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:0|t %s"):format(icon, UnitName(uId))
-							or UnitName(uId)
-						self:AddLine(text, color.r, color.g, color.b)
-						if j >= 5 then
-							break
-						end
-					end
-				end
-			elseif GetNumPartyMembers() > 0 then
-				for i = 1, GetNumPartyMembers() do
-					local uId = "party" .. i
-					if not frame.reverse and not UnitIsUnit(uId, "player") and not UnitIsDeadOrGhost(uId) and
-						self.checkFunc(uId, self.range) and
-						(not self.filter or self.filter(uId)) then
-						j = j + 1
-						color = RAID_CLASS_COLORS[select(2, UnitClass(uId))] or NORMAL_FONT_COLOR
-						local icon = GetRaidTargetIndex(uId)
-						local text = icon and ("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:0|t %s"):format(icon, UnitName(uId))
-							or UnitName(uId)
-						self:AddLine(text, color.r, color.g, color.b)
-						if j >= 5 then
-							break
-						end
-					elseif frame.reverse and not UnitIsUnit(uId, "player") and not UnitIsDeadOrGhost(uId) and
-						not self.checkFunc(uId, self.range) and
-						(not self.filter or self.filter(uId)) then
-						j = j + 1
-						color = RAID_CLASS_COLORS[select(2, UnitClass(uId))] or NORMAL_FONT_COLOR
-						local icon = GetRaidTargetIndex(uId)
-						local text = icon and ("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:0|t %s"):format(icon, UnitName(uId))
-							or UnitName(uId)
-						self:AddLine(text, color.r, color.g, color.b)
-						if j >= 5 then
-							break
-						end
-					end
-				end
-			end
+	local supported = initRangeCheck()
+	if supported and radarFrame and radarFrame.autoHidden then
+		radarFrame.autoHidden = nil
+		radarFrame:Show()
+		if self.autoShown then
+			self.autoShown = nil
+			self:Hide()
+			return
+		end
+	end
+	if self.bossMode then
+		local uId = self.bossUnit
+		if uId and enemyCheckFunc(uId, self.range) and (not self.filter or self.filter(uId)) then
+			local color = NORMAL_FONT_COLOR
+			self:AddLine(UnitName(uId), color.r, color.g, color.b)
 		end
 	else
-		if GetNumRaidMembers() > 0 then
-			for i = 1, GetNumRaidMembers() do
-				local uId = "raid" .. i
-				if not frame.reverse and not UnitIsUnit(uId, "player") and
-				not UnitIsDeadOrGhost(uId) and
-				self.checkFunc(uId, self.range) and
-				(not self.filter or self.filter(uId)) then
-					j = j + 1
-					color = RAID_CLASS_COLORS[select(2, UnitClass(uId))] or NORMAL_FONT_COLOR
-					local icon = GetRaidTargetIndex(uId)
-					local text = icon and ("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:0|t %s"):format(icon, UnitName(uId))
-						or UnitName(uId)
-					self:AddLine(text, color.r, color.g, color.b)
-					if j >= 5 then
-						break
-					end
-				elseif frame.reverse and not UnitIsUnit(uId, "player") and
-				not UnitIsDeadOrGhost(uId) and
-				not self.checkFunc(uId, self.range) and
-				(not self.filter or self.filter(uId)) then
-					j = j + 1
-					color = RAID_CLASS_COLORS[select(2, UnitClass(uId))] or NORMAL_FONT_COLOR
-					local icon = GetRaidTargetIndex(uId)
-					local text = icon and ("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:0|t %s"):format(icon, UnitName(uId))
-						or UnitName(uId)
-					self:AddLine(text, color.r, color.g, color.b)
-					if j >= 5 then
-						break
-					end
-				end
-			end
-		elseif GetNumPartyMembers() > 0 then
-			for i = 1, GetNumPartyMembers() do
-				local uId = "party" .. i
-				if not frame.reverse and not UnitIsUnit(uId, "player") and
-				not UnitIsDeadOrGhost(uId) and
-				self.checkFunc(uId, self.range) and
-				(not self.filter or self.filter(uId)) then
-					j = j + 1
-					color = RAID_CLASS_COLORS[select(2, UnitClass(uId))] or NORMAL_FONT_COLOR
-					local icon = GetRaidTargetIndex(uId)
-					local text = icon and ("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:0|t %s"):format(icon, UnitName(uId))
-						or UnitName(uId)
-					self:AddLine(text, color.r, color.g, color.b)
-					if j >= 5 then
-						break
-					end
-				elseif frame.reverse and not UnitIsUnit(uId, "player") and
-				not UnitIsDeadOrGhost(uId) and
-				not self.checkFunc(uId, self.range) and
-				(not self.filter or self.filter(uId)) then
-					j = j + 1
-					color = RAID_CLASS_COLORS[select(2, UnitClass(uId))] or NORMAL_FONT_COLOR
-					local icon = GetRaidTargetIndex(uId)
-					local text = icon and ("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:0|t %s"):format(icon, UnitName(uId))
-						or UnitName(uId)
-					self:AddLine(text, color.r, color.g, color.b)
-					if j >= 5 then
-						break
-					end
+		local unitID, numPlayers = getGroupUnits()
+		local reverse = frame.reverse and true or false
+		for i = 1, numPlayers do
+			local uId = unitID:format(i)
+			if not UnitIsUnit(uId, "player") and not UnitIsDeadOrGhost(uId) and (not self.filter or self.filter(uId))
+				and (self.checkFunc(uId, self.range) and true or false) ~= reverse then
+				j = j + 1
+				addUnitLine(self, uId)
+				if j >= 5 then
+					break
 				end
 			end
 		end
-		--self:AddLine(L.RANGE_CHECK_ZONE_UNSUPPORTED:format(self.range))
 	end
 	soundUpdate = soundUpdate + elapsed
 	if soundUpdate >= 5 and j > 0 then
@@ -1152,21 +1052,6 @@ do
 				prevNumPlayers = numPlayers
 
 				local playerX, playerY = GetPlayerMapPosition("player")
-				if playerX == 0 and playerY == 0 then
-					SetMapToCurrentZone() -- refreshes zone so that radar frame can properly check player position
-					playerX, playerY = GetPlayerMapPosition("player")
-					if playerX == 0 and playerY == 0 then
-						DBM:Schedule(1, function() -- attempt a second time after 1 second to recache zone
-							SetMapToCurrentZone()
-							playerX, playerY = GetPlayerMapPosition("player")
-							if playerX == 0 and playerY == 0 then
-								setFrames(self, "text")
-								DBM:AddMsg("Radar is unavailable in this location: GetPlayerMapPosition(\"player\") = 0, 0")
-								return
-							end
-						end)
-					end
-				end
 				for i = 1, numPlayers do
 					local uId = unitID:format(i)
 					if not UnitIsUnit(uId, "player") then
@@ -1225,27 +1110,25 @@ do
 				self:Show()
 			end
 		else
-			if isInSupportedArea then
-				-- we were in an area with known map dimensions during the last update but looks like we left it
+			if isInSupportedArea ~= false then
 				isInSupportedArea = false
+				DBM:AddMsg(L.NO_RANGE)
 			end
-			-- Вместо серого радара показываем текстовый фрейм
-			setFrames(self, "text")
-			DBM:AddMsg(L.NO_RANGE)
-			return
-			-- if isInSupportedArea then
-			-- 	-- we were in an area with known map dimensions during the last update but looks like we left it
-			-- 	isInSupportedArea = false
-			-- 	-- white frame
-			-- 	radarFrame.circle:SetVertexColor(1, 1, 1)
-			-- 	-- hide everything
-			-- 	for _, v in pairs(dots) do
-			-- 		v.dot:Hide()
-			-- 	end
-			-- 	for i = 1, 8 do
-			-- 		charms[i]:Hide()
-			-- 	end
-			-- end
+			for _, v in pairs(dots) do
+				if v.dot then
+					v.dot:Hide()
+				end
+			end
+			for i = 1, 8 do
+				charms[i]:Hide()
+			end
+			self.autoHidden = true
+			self:Hide()
+			if not frame:IsShown() then
+				frame.autoShown = true
+				frame:SetOwner(UIParent, "ANCHOR_PRESERVE")
+				onUpdate(frame, 0)
+			end
 		end
 	end
 end
@@ -1270,136 +1153,136 @@ end
 local getDistanceBetween
 do
 	local mapSizes = DBM.MapSizes
-	-- Две следующие таблицы позаимствованы с DBM с ретейла
-	-- https://github.com/DeadlyBossMods/DBM-Retail/blob/9.0.21/DBM-Core/DBM-RangeCheck.lua#L57
-	-- Расстояния для проверки через предметы
-	-- [метров] = itemID
 
-	local itemRanges = {
-		[5] = 37727,  -- Рубиновый желудь
-		[10] = 34368, -- Настроенные кристаллы-сердечники
-		[13] = 32321, -- Сеть для ловли скальной пустельги
-		[16] = 1251,  -- Льняные бинты
-		[20] = 21519, -- Омела
-		[24] = 31463, -- Кристалл Зеззака
-		[30] = 34191, -- Горсть снежинок
-		[35] = 18904, -- Ультрасжиматель Зорбина
-		[48] = 32698, -- Веревочный аркан
-		[61] = 32825, -- Пушка души
-		[77] = 35278, -- Укрепленная сеть
+	local fallbackChecks = {
+		{ 5, 37727 },
+		{ 10, 34368 },
+		{ 10, nil, 3 },
+		{ 11, nil, 2 },
+		{ 13, 32321 },
+		{ 16, 1251 },
+		{ 20, 21519 },
+		{ 24, 31463 },
+		{ 30, 34191 },
+		{ 30, nil, 1 },
+		{ 35, 18904 },
+		{ 48, 32698 },
+		{ 61, 32825 },
+		{ 77, 35278 },
 	}
 
-	for _, itemId in pairs(itemRanges) do
-		GetItemInfo(itemId) -- получаем данные о предмете, чтобы он был в кэше и IsItemInRange не возвращал nil
+	for _, check in ipairs(fallbackChecks) do
+		if check[2] then
+			GetItemInfo(check[2])
+		end
 	end
 
-	-- Расстояния для проверки через функции api:
-	-- [метров] = distIndex
-	-- https://wowpedia.fandom.com/wiki/API_CheckInteractDistance
-	local apiRanges = {
-		[10] = 3, -- CheckInteractDistance (Дуэль)
-		[11] = 2, -- CheckInteractDistance (Обмен)
-		[30] = 1, -- CheckInteractDistance (Осмотр)
-	}
-
-	-- собственно, сама проверка с ритейл дбма
-	-- название, переводящееся как "это снова БК" говорит о многом...
-	function itsBCAgain(uId, checkrange)
-		if checkrange then -- в этой ветке возвращается true или false, что нам не подходит
-			if itemRanges[checkrange] then -- Only query item range for requested active range check
-				return IsItemInRange(itemRanges[checkrange], uId) and checkrange or 1000
-			elseif apiRanges[checkrange] then -- Only query item range for requested active range if no item found for it
-				return CheckInteractDistance(uId, apiRanges[checkrange]) and checkrange or 1000
-			else
-				return 1000 -- Если ни одна проверка не подходит, просто вернем очень большое значение, чтобы точно было false в mapRangeCheck
-			end
-		else -- используем только эту часть, так как нам нужно вернуть числовое значение
-			-- ID и дистанции взяты с таблиц выше
-			if IsItemInRange(37727, uId) == 1 then return 5
-			-- нужен предмет с рейндж 8, часто встречающаяся дальность на механиках
-			elseif IsItemInRange(34368, uId) == 1 then return 10
-			elseif CheckInteractDistance(uId, 3) == 1 then return 10
-			elseif CheckInteractDistance(uId, 2) == 1 then return 11
-			elseif IsItemInRange(32321, uId) == 1 then return 13
-			elseif IsItemInRange(1251, uId) == 1 then return 16
-			elseif IsItemInRange(21519, uId) == 1 then return 20
-			elseif IsItemInRange(31463, uId) == 1 then return 24
-			elseif CheckInteractDistance(uId, 1) == 1 then return 30
-			elseif IsItemInRange(18904, uId) == 1 then return 35
-			elseif IsItemInRange(32698, uId) == 1 then return 48
-			elseif IsItemInRange(32825, uId) == 1 then return 61
-			elseif IsItemInRange(35278, uId) == 1 then return 77 -- макс дальность, после нее IsItemInRange возвращает nil, так как юнит слишком далеко
-			else return 1000 end -- Если ни одна проверка не подходит, просто вернем очень большое значение, чтобы точно было false в mapRangeCheck
+	local function runCheck(check, uId)
+		if check[2] then
+			return IsItemInRange(check[2], uId)
 		end
+		return CheckInteractDistance(uId, check[3])
+	end
+
+	local function fallbackInRange(uId, range)
+		for _, check in ipairs(fallbackChecks) do
+			if check[1] >= range then
+				local result = runCheck(check, uId)
+				if result == 1 then
+					return true
+				elseif result == 0 then
+					return false
+				end
+			end
+		end
+		return false
+	end
+
+	local function fallbackDistance(uId)
+		for _, check in ipairs(fallbackChecks) do
+			if runCheck(check, uId) == 1 then
+				return check[1]
+			end
+		end
+		return 1000
+	end
+
+	local function getMapDims()
+		local levels = mapSizes[GetMapInfo()]
+		if not levels then
+			return
+		end
+		local level = GetCurrentMapDungeonLevel()
+		if DungeonUsesTerrainMap() then
+			level = level - 1
+		end
+		return levels[level]
 	end
 
 	function getDistanceBetween(uId, x, y)
-		if x == 0 and y == 0 then -- Используем проверку через предметы
-			--print("Расстояние до "..uId.." = "..itsBCAgain(uId))
-			return itsBCAgain(uId)
-		end
-		if not x then -- If only one arg then 2nd arg is always assumed to be player
-			x, y = GetPlayerMapPosition("player")
-		end
-		if type(x) == "string" and UnitExists(x) then -- arguments: uId, uId2
-			local uId2 = x
-			x, y = GetPlayerMapPosition(uId2)
-			if not x then
-				print("getDistanceBetween failed for: " ..
-					uId .. " (" .. tostring(UnitExists(uId)) .. ") and " .. uId2 .. " (" .. tostring(UnitExists(uId2)) .. ")")
+		local other
+		if not x then
+			other = "player"
+		elseif type(x) == "string" then
+			if not UnitExists(x) then
 				return
 			end
+			other = x
+		end
+		if other then
+			x, y = GetPlayerMapPosition(other)
 		end
 		local startX, startY = GetPlayerMapPosition(uId)
-		local mapName = GetMapInfo()
-		local level = GetCurrentMapDungeonLevel()
-		local usesTerrainMap = DungeonUsesTerrainMap()
-		--if level == 0 then level = 1 end
-		level = usesTerrainMap and level - 1 or level
-		local dims = mapSizes[mapName] and mapSizes[mapName][level]
-		if not dims then
-			return
+		local dims = getMapDims()
+		if dims and not (x == 0 and y == 0) and not (startX == 0 and startY == 0) then
+			local dX = (startX - x) * dims[1]
+			local dY = (startY - y) * dims[2]
+			return (dX * dX + dY * dY) ^ 0.5
 		end
-		local dX = (startX - x) * dims[1]
-		local dY = (startY - y) * dims[2]
-		--print(math.sqrt(dX * dX + dY * dY))
-		return math.sqrt(dX * dX + dY * dY)
+		if other == "player" then
+			return fallbackDistance(uId)
+		elseif other and UnitIsUnit(uId, "player") then
+			return fallbackDistance(other)
+		end
 	end
 
 	local function mapRangeCheck(uId, range)
-		return getDistanceBetween(uId, GetPlayerMapPosition("player")) < range
+		local dims = getMapDims()
+		if dims then
+			local pX, pY = GetPlayerMapPosition("player")
+			local x, y = GetPlayerMapPosition(uId)
+			if not (pX == 0 and pY == 0) and not (x == 0 and y == 0) then
+				local dX = (x - pX) * dims[1]
+				local dY = (y - pY) * dims[2]
+				return dX * dX + dY * dY < range * range
+			end
+		end
+		return fallbackInRange(uId, range)
 	end
 
-	function initRangeCheck(range)
-		if checkFuncs[range] ~= mapRangeCheck then
-			return true
-		end
+	function initRangeCheck()
 		local pX, pY = GetPlayerMapPosition("player")
 		if pX == 0 and pY == 0 then
+			if WorldMapFrame:IsShown() then
+				return false
+			end
 			SetMapToCurrentZone()
 			pX, pY = GetPlayerMapPosition("player")
-			if pX == 0 and pY == 0 then -- координат все еще нет, значит все очень плохо (или мы на Джайне) и надо проверять через предметы и интеракты
+			if pX == 0 and pY == 0 then
 				return false
 			end
 		end
-		local levels = mapSizes[GetMapInfo()]
-		if not levels then
+		if not mapSizes[GetMapInfo()] then
 			return false
 		end
-		local level = GetCurrentMapDungeonLevel()
-		local usesTerrainMap = DungeonUsesTerrainMap()
-		level = usesTerrainMap and level - 1 or level
-		local dims = levels[level]
-		if not dims and levels and GetCurrentMapDungeonLevel() == 0 then -- we are in a known zone but the dungeon level seems to be wrong
-			SetMapToCurrentZone() -- fixes the dungeon level
-			dims = levels[GetCurrentMapDungeonLevel()] -- try again
-			if not dims then -- there is actually a level 0 in this zone but we don't know about it...too bad :(
-				return false
-			end
-		elseif not dims then
-			return false
+		if getMapDims() then
+			return true
 		end
-		return true -- everything ok!
+		if GetCurrentMapDungeonLevel() == 0 and not WorldMapFrame:IsShown() then
+			SetMapToCurrentZone()
+			return getMapDims() ~= nil
+		end
+		return false
 	end
 
 	setmetatable(checkFuncs, {
@@ -1580,9 +1463,13 @@ end
 function rangeCheck:Hide()
 	if frame then
 		frame.previouslyShown = false
+		frame.autoShown = nil
 		frame:Hide()
 	end
-	if radarFrame then radarFrame:Hide() end
+	if radarFrame then
+		radarFrame.autoHidden = nil
+		radarFrame:Hide()
+	end
 end
 
 function rangeCheck:IsShown()
@@ -1597,9 +1484,20 @@ end
 -- GetDistance(uId, x, y) -- distance between uId and the coordinates
 -- GetDistance(uId, uId2) -- distance between the two uIds
 function rangeCheck:GetDistance(...)
-	if initRangeCheck() then
-		return getDistanceBetween(...)
+	initRangeCheck()
+	return getDistanceBetween(...)
+end
+
+function rangeCheck:GetDistanceAll(range)
+	initRangeCheck()
+	local unitID, numPlayers = getGroupUnits()
+	for i = 1, numPlayers do
+		local uId = unitID:format(i)
+		if not UnitIsUnit(uId, "player") and not UnitIsDeadOrGhost(uId) and checkFuncs[range](uId, range) then
+			return true
+		end
 	end
+	return false
 end
 
 do

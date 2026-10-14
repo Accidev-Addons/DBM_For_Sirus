@@ -53,14 +53,11 @@ local function replaceSpellLinks(id)
 	return ("|cff71d5ff|Hspell:%d|h%s|h|r"):format(spellId, spellName)
 end
 
-local hack = OptionsList_OnLoad
-function OptionsList_OnLoad(self, ...)
-	if self:GetName() ~= "DBM_GUI_DropDown" then
-		hack(self, ...)
-	end
-end
-
 local tabFrame1 = CreateFrame("Frame", "DBM_GUI_DropDown", _G["DBM_GUI_OptionsFrame"], "OptionsFrameListTemplate")
+for _, button in ipairs(tabFrame1.buttons) do
+	button:Hide()
+end
+_G[tabFrame1:GetName() .. "Bottom"]:SetVertexColor(1, 1, 1)
 tabFrame1:Hide()
 tabFrame1:SetFrameStrata("TOOLTIP")
 tabFrame1.offset = 0

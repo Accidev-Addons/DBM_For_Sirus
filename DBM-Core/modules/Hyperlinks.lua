@@ -86,18 +86,11 @@ local function LinkHook(self, link)
 	end
 end
 
-local _SetItemRef = SetItemRef
-
-
-function SetItemRef(link, textref, button, chatFrame)
-	if 	link:match("DBM:") then
-		-- print(link, textref, button, chatFrame)
-		LinkHook(chatFrame,link)
-	else
-		_SetItemRef(link, textref, button, chatFrame)
+hooksecurefunc("SetItemRef", function(link, _, _, chatFrame)
+	if link:sub(1, 14) == "BNplayer::DBM:" then
+		LinkHook(chatFrame, link:sub(11))
 	end
-
-end
+end)
 
 
 
