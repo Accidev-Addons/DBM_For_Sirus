@@ -234,14 +234,11 @@ local DBMOptions = CreateFrame("Frame", "$parentDBMOptions", frame)
 DBMOptions.name = L.OTabOptions
 frame:CreateTab(DBMOptions)
 
-local hack = OptionsList_OnLoad
-function OptionsList_OnLoad(self, ...)
-	if self:GetName() ~= frame:GetName() .. "List" then
-		hack(self, ...)
-	end
-end
-
 local frameList = CreateFrame("Frame", "$parentList", frame, "OptionsFrameListTemplate")
+for _, button in ipairs(frameList.buttons) do
+	button:Hide()
+end
+_G[frameList:GetName() .. "Bottom"]:SetVertexColor(1, 1, 1)
 frameList:SetWidth(255)
 frameList:SetPoint("TOPLEFT", 22, -40)
 frameList:SetPoint("BOTTOMLEFT", frameWebsite, "TOPLEFT", 0, 5)

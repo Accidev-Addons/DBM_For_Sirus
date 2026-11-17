@@ -5288,6 +5288,7 @@ end
 
 do
 	local tooltipsHidden = false
+	local tooltipHooked = false
 	--Delayed Guild Combat sync object so we allow time for RL to disable them
 	local function delayedGCSync(modId, difficultyIndex, name, thisTime, wipeHP)
 		if not thisTime and updateNotificationDisplayed == 0 then ---t3 is version
@@ -5411,10 +5412,15 @@ do
 				end
 			end
 			if self.Options.HideTooltips then
-				--Better or cleaner way?
 				tooltipsHidden = true
-				GameTooltip.Temphide = function() GameTooltip:Hide() end;
-				GameTooltip:SetScript("OnShow", GameTooltip.Temphide)
+				if not tooltipHooked then
+					tooltipHooked = true
+					GameTooltip:HookScript("OnShow", function(tooltip)
+						if tooltipsHidden then
+							tooltip:Hide()
+						end
+					end)
+				end
 			end
 			if self.Options.DisableSFX and GetCVar("Sound_EnableSFX") == "1" then
 				SetCVar("Sound_EnableSFX", 0)
@@ -5869,11 +5875,7 @@ do
 				-- 	WatchFrame:Show()
 				-- 	watchFrameRestore = false
 				-- end
-				if tooltipsHidden then
-					--Better or cleaner way?
-					tooltipsHidden = false
-					GameTooltip:SetScript("OnShow", GameTooltip.Show)
-				end
+				tooltipsHidden = false
 				if self.Options.DisableSFX then
 					SetCVar("Sound_EnableSFX", 1)
 				end

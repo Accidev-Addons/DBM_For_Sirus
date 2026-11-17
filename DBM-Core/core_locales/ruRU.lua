@@ -236,7 +236,7 @@ L.MOVABLE_BAR = "Перетащите!"
 
 L.PIZZA_SYNC_INFO      = "|Hplayer:%1$s|h[%1$s]|h транслирует Вам таймер " ..
 	L.DBM ..
-	": '%2$s'\n|HDBM:cancel:%2$s:nil|h|cff3588ff[Отменить этот таймер]|r|h  |HDBM:ignore:%2$s:%1$s|h|cff3588ff[Игнорировать таймеры от %1$s]|r|h"
+	": '%2$s'\n|HBNplayer::DBM:cancel:%2$s:nil|h|cff3588ff[Отменить этот таймер]|r|h  |HBNplayer::DBM:ignore:%2$s:%1$s|h|cff3588ff[Игнорировать таймеры от %1$s]|r|h"
 L.PIZZA_CONFIRM_IGNORE = "Игнорировать таймеры " .. L.DBM .. " от %s на время текущего сеанса?"
 L.PIZZA_ERROR_USAGE    = "Использование: /dbm [broadcast] timer <time> <text>"
 
