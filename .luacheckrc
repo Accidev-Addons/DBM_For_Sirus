@@ -170,6 +170,7 @@ globals = {
 	"TimerTracker",
 	"TimerTracker_OnEvent",
 	"C_Talent",
+	"C_GlobalStorage",
 	"TimerFrame",
 	"WorldStateTopCenterFrame",
 
